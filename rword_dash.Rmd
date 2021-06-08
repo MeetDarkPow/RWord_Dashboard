@@ -1,0 +1,122 @@
+---
+title: "Top R Title Words RBloggers & StackOverflow"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(crosstalk)
+library(lubridate)
+library(tm)
+
+dt <- dir("RB_data", full.names = T) %>%
+  map_df(read_csv)
+dt <- dt[!duplicated(dt$Title),]
+dt$Date <- year(mdy(dt$Date))
+
+df <- dt %>%
+  select(Title, Date, Author) %>%
+  group_by(Date) %>%
+  summarise(all_year_title = paste(Title, collapse = " "))
+df$all_year_title <- gsub("[^A-Za-z' ]", " ", as.character(df$all_year_title), ignore.case = TRUE)
+df$all_year_title <- tolower(df$all_year_title)
+df$all_year_title <- str_squish(df$all_year_title)
+
+sd <- SharedData$new(df)
+
+```
+
+
+# Overall Statistics
+
+## Row
+
+### Total RBloggers Blogs Posted
+
+```{r}
+#valueBox(total_events, icon = "fa-calendar-alt", color = "orange")
+```
+
+### Total StackOverflow Questions
+
+```{r}
+#valueBox(total_rsvp, icon = "fa-thumbs-up", color = "green")
+```
+
+## Row
+
+### Daily Events Count
+
+```{r}
+# daily_count <- as.data.frame(table(event_data$local_date))
+# plot1 <- daily_count %>%
+#   plot_ly(x = ~Var1,
+#           y = ~Freq,
+#           color = "purple",
+#           type = 'bar') %>%
+#   layout(xaxis = list(title = "Date"), yaxis = list(title = "Number of Events", 
+#                                                     range = c(0, max(daily_count$Freq))))
+# plot1
+```
+
+### Location Vs Event Count
+
+```{r}
+# loc_count <- as.data.frame(table(event_data$venue_city))
+# plot2 <- loc_count %>%
+#   plot_ly(x = ~Freq[-1],
+#           y = ~Var1[-1],
+#           marker = list(color = 'rgba(38, 24, 74, 0.8)',
+#                       line = list(color = 'rgb(248, 248, 249)', width = 1)),
+#           type = 'bar', orientation = 'h') %>%
+#   layout(xaxis = list(title = "Number of Events"), yaxis = list(title = "Location of Events"))
+# plot2
+```
+
+# RBloggers {data-orientation=columns} 
+
+## Column {data-width = 300}
+
+### Map Filters
+
+```{r filter_selection}
+filter_select(
+  id = "Date",
+  label = "Year",
+  sharedData = sd,
+  group = ~Date
+)
+```
+
+## Column {data-width = 600}
+
+### Interactive map
+
+```{r plot}
+temp <- sd %>%
+  Corpus(VectorSource(df$all_year_title), readerControl = list(reader=readPlain, language="en")) %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removeWords, stopwords("english")) %>%
+  tm_map(stripWhitespace) %>%
+  TermDocumentMatrix() %>%
+  as.matrix() %>%
+  rowSums() %>%
+  sort(, decreasing = T) %>%
+  head(20)
+  
+top_words <- data.frame(word = names(temp), freq=temp)
+plot_ly(top_words, x = ~word, y = ~freq, type = 'bar',
+             text = y, textposition = 'outside',
+             marker = list(color = 'rgb(158,202,225)',
+                           line = list(color = 'rgb(8,48,107)', width = 1.5))) %>%
+  layout(title = "Top 20 RBloggers post words",
+         xaxis = list(title = "Words"),
+         yaxis = list(title = "Frequency of words"))
+
+
+```
